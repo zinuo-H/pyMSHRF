@@ -3,12 +3,14 @@
 # Theoritical Background
 `High-resolution filtering (HRF)` approach is both feasible and highly specific toward correct identifications, which bridges the gap between unit resolution GC/MS spectra and accurate mass data dubious. [(ref)](https://doi.org/10.1021/acs.analchem.5b01503)
 
+The isotope pattern calculator module is based on pyISOPACh package. [(ref)](https://github.com/AberystwythSystemsBiology/pyISOPACh)
+
 # How to use this package
 ## Installation
 
 pyMSHRF requires Python 3+ and is unfortunately not compatible with Python 2. If you are still using Python 2, a clever workaround is to install Python 3 and use that instead.
 
-The easiest way of installing pyISOPACh is using ```pip```:
+The easiest way of installing pyMSHRF is using ```pip```:
 
 ```
 pip install pyMSHRF
