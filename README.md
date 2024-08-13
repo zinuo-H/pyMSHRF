@@ -5,8 +5,8 @@
 
 The isotope pattern calculator module is based on pyISOPACh package. [(ref)](https://github.com/AberystwythSystemsBiology/pyISOPACh)
 
-# How to use this package
-## Installation
+
+# Installation
 
 pyMSHRF requires Python 3+ and is unfortunately not compatible with Python 2. If you are still using Python 2, a clever workaround is to install Python 3 and use that instead.
 
@@ -15,7 +15,7 @@ The easiest way of installing pyMSHRF is using ```pip```:
 ```
 pip install pyMSHRF
 ```
-
+# Usage
 ## Usage of HRF calculation function
 ```python
 import pyMSHRF
@@ -56,5 +56,9 @@ This function returns a dictionary, where each key-value pair corresponds to a s
 
 Currently, the `read_one_spectrum` function supports the following file formats: `.mgf`, `.msp`, `.mzML`, and `.lbm2`.
 
-# License
-Code released under [the MIT license](https://github.com/AberystwythSystemsBiology/pyISOPACh/blob/master/LICENSE).
+# Reference
+1. N. W. Kwiecien et al., High-Resolution Filtering for Improved Small Molecule Identification via GC/MS. Analytical Chemistry 87, 8328-8335 (2015).
+
+2. <https://github.com/AberystwythSystemsBiology/pyISOPACh>
+
+3. <https://github.com/YuanyueLi/MSEntropy>
