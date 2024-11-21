@@ -1,40 +1,70 @@
-from .. import pyisopach
+from . import pyisopach
 import numpy as np
-from re import findall
+
 
 ELECTRON_WEIGHT=0.0005485799
 
 
-def generate_structure_dict(molecule:str) -> dict:
-    parsed = findall(r"([A-Z][a-z]*)(\d*)|(\()|(\))(\d*)",  molecule)
-    structure_dict = {}
+def parse_formula(formula:str) -> dict:
+    """
+    Parses a chemical formula into a dictionary of elements and their counts.
+    Args:
+        formula (str): Chemical formula, e.g., "C8H8O3".
+    Returns:
+        dict: A dictionary with elements as keys and their counts as values, e.g., {"C": 8, "H": 8, "O": 3}.
+    """
+    from re import findall
+    parsed = findall(r"([A-Z][a-z]*)(\d*)|(\()|(\))(\d*)",  formula)
+    elements = {}
     for element_details in parsed:
         element = element_details[0]
-        if element not in structure_dict:
-            structure_dict[element] = 0
+        if element not in elements:
+            elements[element] = 0
             
         element_count = sum(
             [int(x) for x in element_details[1:] if x != ""])
         if element_count > 0:
-            structure_dict[element] += element_count
+            elements[element] += element_count
         else:
-            structure_dict[element] += 1
-    return structure_dict
+            elements[element] += 1
+    
+    def _hill_sort_key(element): # Define a function for sorting rules
+        if element == 'C':  # Carbon (C) comes first
+            return (0, element)
+        elif element == 'H':  # Hydrogen (H) comes second
+            return (1, element)
+        else:  # Other elements are sorted alphabetically
+            return (2, element)
+    
+    sorted_elements = dict(sorted(elements.items(), key=lambda x: _hill_sort_key(x[0])))
+    return sorted_elements
 
-def mol_to_formula(molstr:str) -> str:
-    structure_dict = generate_structure_dict(molstr)
-    formula = []
-    for key in structure_dict:
-        if structure_dict[key] ==1:
-            formula.append(key)
-        else: 
-            formula.append(key + str(structure_dict[key]))
-    formula = "".join(formula)
+def format_formula(elements) -> str:
+    def _format_formula(elements) -> str:
+        formula = []
+        for key in elements.keys():  # Iterate explicitly in the key order
+            value = elements[key]
+            if value > 0:  # Only include elements with counts greater than 0
+                formula.append(key if value == 1 else key + str(value))
+        return "".join(formula)
+    def _hill_sort_key(element): # Define a function for sorting rules
+        if element == 'C':  # Carbon (C) comes first
+            return (0, element)
+        elif element == 'H':  # Hydrogen (H) comes second
+            return (1, element)
+        else:  # Other elements are sorted alphabetically
+            return (2, element)
+    
+    if isinstance(elements,str):
+        elements = parse_formula(elements)
+
+    sorted_elements = dict(sorted(elements.items(), key=lambda x: _hill_sort_key(x[0])))
+    formula=_format_formula(sorted_elements)
     return formula
     
     
 def generate_sub_formulas(formula:str):
-    elements_dict = generate_structure_dict(formula)
+    elements_dict = parse_formula(formula)
     def backtrack(idx, current_formula):
         if idx == len(keys):
             sub_formulas.append(current_formula)
@@ -54,7 +84,7 @@ def generate_sub_formulas(formula:str):
     
     sub_formulas_new=[]
     for sub_formula in sub_formulas:
-        sub_formulas_new.append(mol_to_formula(sub_formula))
+        sub_formulas_new.append(format_formula(sub_formula))
     
     return sub_formulas_new
 
@@ -77,7 +107,6 @@ def HRF(formula:str,query_spectrum, delta_ppm=None,delta_da=None):
             mol = pyisopach.Element(sub_formula,1)
             isotopic_weight = np.array(mol.isotopic_weight, dtype=np.float64)  - ELECTRON_WEIGHT
         return isotopic_weight
-    
     
     sub_formulas=generate_sub_formulas(formula)
     sub_formulas_dict = {}

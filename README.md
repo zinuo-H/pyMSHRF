@@ -19,9 +19,13 @@ pip install pyMSHRF
 ## Usage of HRF calculation function
 ```python
 import pyMSHRF
+import numpy as np
 
 formula = 'C5H7N3O2'
 peaks_query = np.array([[191.09071, 14670.0], [124.05742, 3543.0], [141.09334, 6191.0]], dtype = np.float32)
+
+# Add TMS-derived group if desired
+formula_derived = pyMSHRF.derivatization(formula, num_tms=1, num_meox=0)
 
 # Calculate HRF score
 HRF_score = pyMSHRF.HRF(formula, peaks_query, delta_da = 0.02)
