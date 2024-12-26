@@ -11,7 +11,8 @@ def parse_formula(formula:str) -> dict:
     Args:
         formula (str): Chemical formula, e.g., "C8H8O3".
     Returns:
-        dict: A dictionary with elements as keys and their counts as values, e.g., {"C": 8, "H": 8, "O": 3}.
+        dict: A dictionary with elements as keys and their counts as values, 
+        e.g., {"C": 8, "H": 8, "O": 3}.
     """
     from re import findall
     parsed = findall(r"([A-Z][a-z]*)(\d*)|(\()|(\))(\d*)",  formula)
@@ -40,6 +41,36 @@ def parse_formula(formula:str) -> dict:
     return sorted_elements
 
 def format_formula(elements) -> str:
+    """
+    Formats a chemical formula based on the Hill system, ensuring that elements are displayed in a standardized order:
+    - Carbon (C) is listed first (if present).
+    - Hydrogen (H) follows (if present).
+    - All other elements are sorted alphabetically.
+
+    Parameters:
+    -----------
+    elements : dict or str
+        - If `dict`: A dictionary where keys are element symbols (e.g., "C", "H", "O") and values are their counts (positive integers).
+        - If `str`: A string representing a chemical formula (e.g., "C6H12O6"). The string will be parsed into a dictionary of elements.
+
+    Returns:
+    --------
+    str
+        A string representation of the chemical formula sorted according to the Hill system.
+
+    Notes:
+    ------
+    - Elements with a count of 1 will not have a subscript (e.g., "C" instead of "C1").
+    - Elements with a count of 0 or negative values are excluded from the formula.
+
+    Examples:
+    ---------
+    >>> format_formula({"C": 6, "H": 12, "O": 6})
+    'C6H12O6'
+
+    >>> format_formula("HCH")
+    'CH2'
+    """
     def _format_formula(elements) -> str:
         formula = []
         for key in elements.keys():  # Iterate explicitly in the key order
@@ -64,6 +95,30 @@ def format_formula(elements) -> str:
     
     
 def generate_sub_formulas(formula:str):
+    """
+    Generates all possible subformulas of a given chemical formula, considering the number of atoms of each element.
+    Each subformula is formatted according to the Hill system.
+    
+    Parameters:
+    -----------
+    formula : str
+        A string representing a chemical formula (e.g., "C6H12O6"). The formula is parsed into a dictionary of elements.
+    
+    Returns:
+    --------
+    list of str
+        A list of all possible subformulas, where each subformula:
+        - Contains a valid subset of the elements and their counts from the input formula.
+        - Is formatted in the standardized Hill system order.
+
+    Examples:
+    ---------
+    >>> generate_sub_formulas("H2O")
+    ['H', 'H2', 'O', 'HO', 'H2O']
+    
+    >>> generate_sub_formulas("C2H4O")
+    ['C', 'C2', 'H', 'H2', 'H3', 'H4', 'O', 'CO', 'C2O', 'HO', 'H2O', 'H3O', 'H4O', 'CHO', 'CH2O', 'CH3O', 'CH4O', 'C2HO', 'C2H2O', 'C2H3O', 'C2H4O']
+    """
     elements_dict = parse_formula(formula)
     def backtrack(idx, current_formula):
         if idx == len(keys):
@@ -89,11 +144,29 @@ def generate_sub_formulas(formula:str):
     return sub_formulas_new
 
 
-# calculate HRF
-def HRF(formula:str,query_spectrum, delta_ppm=None,delta_da=None): 
+def HRF(formula:str,
+        query_spectrum, 
+        delta_ppm=None,delta_da=0.02): 
     """
-     If both delta_ppm and delta_da is defined, delta_da will be used.
-
+    Calculate the High-Resolution Filtering (HRF) score for a given molecular formula and query spectrum.
+    
+    Parameters:
+    ----------
+     formula : str
+         The chemical formula of the precursor molecule (e.g., "C6H12O6").
+     query_spectrum : array-like
+         A 2D array or list of measured spectrum peaks, where each entry is a pair:
+         [m/z, intensity]. The array should be of shape (n_peaks, 2).
+     delta_ppm : float
+         The mass tolerance in ppm for fragment matching. If both `delta_ppm` and 
+         `delta_da` are specified, `delta_da` will take precedence.
+     delta_da : float
+         The mass tolerance in Da for fragment matching. Defaults to 0.02 Da.
+    
+     Returns:
+     -------
+     float
+         The calculated HRF score.
     """
     query_spectrum= np.array(query_spectrum,dtype=np.float64)
     if np.sum(query_spectrum[:,1]) == 0:
@@ -131,7 +204,7 @@ def HRF(formula:str,query_spectrum, delta_ppm=None,delta_da=None):
                 closest_formula = formula
         
         if closest_formula is not None:
-            # peak a annotated
+            # peak annotated
             spec_merged.append(query_spectrum[a])
             if "_iso" not in closest_formula:
                 match_isotopic_weight_dis = _get_isotopic_weight(closest_formula)
@@ -154,10 +227,47 @@ def HRF(formula:str,query_spectrum, delta_ppm=None,delta_da=None):
     return HRF
 
 
-# calculate RHRF
-def RHRF(formula,query_spectrum, ref_spectrum, delta_ppm=None,delta_da=None,match_delta_ppm=None,match_delta_da=0.6): 
+def RHRF(formula,query_spectrum, 
+        ref_spectrum, 
+        weight=0, 
+        delta_ppm=None,delta_da=0.02,
+        match_delta_ppm=None,match_delta_da=0.6): 
     """
-     If both delta_ppm and delta_da is defined, delta_da will be used.
+    Calculate the Reverse High-Resolution Filtering (RHRF) score for a given molecular formula, 
+    query spectrum, and reference spectrum.
+    
+    Parameters
+    ----------
+    formula : str
+        The chemical formula of the precursor molecule (e.g., "C6H12O6").
+    query_spectrum : array-like
+        A 2D array or list of measured spectrum peaks, where each entry is a pair:
+        [m/z, intensity]. The array should be of shape (n_peaks, 2).
+    ref_spectrum : array-like
+        A 2D array or list of reference spectrum peaks, where each entry is a pair:
+        [m/z, intensity]. The array should be of shape (n_peaks, 2).
+    weight : float, optional
+        The weight assigned to peaks present in the query spectrum but absent in the reference spectrum,
+        If the `weight` is set to 0, peaks absent in the reference spectrum are ignored. Defaults to 0.
+    delta_ppm : float, optional
+        The mass tolerance in ppm for fragment matching in the HRF algorithm.
+        If both `delta_ppm` and `delta_da` are specified, `delta_da` takes precedence.
+    delta_da : float, optional
+        The mass tolerance in Da for fragment matching in the HRF algorithm.
+        Defaults to 0.02 Da.
+    match_delta_ppm : float, optional
+        The mass tolerance in ppm for matching query and reference spectra.
+        If both `match_delta_ppm` and `match_delta_da` are specified, `match_delta_da` takes precedence.
+    match_delta_da : float, optional
+        The mass tolerance in Daltons (Da) for matching query and reference spectra.
+        Defaults to 0.6 Da.
+        
+    Returns
+    -------
+    float
+        The calculated RHRF score.
+
+    
     """
     query_spectrum= np.array(query_spectrum,dtype=np.float64)
     ref_spectrum= np.array(ref_spectrum,dtype=np.float64)
@@ -175,6 +285,8 @@ def RHRF(formula,query_spectrum, ref_spectrum, delta_ppm=None,delta_da=None,matc
         
         if mass_delta < -match_delta_da:
             # Peak only existed in query_spectrum .
+            if weight > 0:
+                query_spec_match.append(np.array([query_spectrum[a,0],query_spectrum[a,1]*weight]))
             a += 1
         elif mass_delta > match_delta_da:
             # Peak only existed in ref_spectrum.
@@ -185,6 +297,12 @@ def RHRF(formula,query_spectrum, ref_spectrum, delta_ppm=None,delta_da=None,matc
             query_spec_match.append(query_spectrum[a])
             a += 1
             b += 1
+
+    while a < query_spectrum.shape[0]:
+        # Peak only existed in query_spectrum 
+        if weight > 0:
+            query_spec_match.append(np.array([query_spectrum[a,0],query_spectrum[a,1]*weight]))
+        a += 1
     
     if query_spec_match:
         query_spec_match = np.array(query_spec_match, dtype=np.float64)
