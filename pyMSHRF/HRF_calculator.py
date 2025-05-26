@@ -1,4 +1,4 @@
-from . import pyisopach
+from pyMSHRF import pyisopach
 import numpy as np
 
 
@@ -144,42 +144,28 @@ def generate_sub_formulas(formula:str):
     return sub_formulas_new
 
 
-def HRF(formula:str,
+def _get_isotopic_weight(sub_formula):
+    try:
+        mol = pyisopach.Molecule(sub_formula)
+        isotopic_weight = mol.isotopic_distribution()[0] - ELECTRON_WEIGHT
+    except:
+        mol = pyisopach.Element(sub_formula,1)
+        isotopic_weight = np.array(mol.isotopic_weight, dtype=np.float64)  - ELECTRON_WEIGHT
+    return isotopic_weight
+    
+
+def get_HRF_spec(formula:str,
         query_spectrum, 
         delta_ppm=None,delta_da=0.02): 
     """
-    Calculate the High-Resolution Filtering (HRF) score for a given molecular formula and query spectrum.
-    
-    Parameters:
-    ----------
-     formula : str
-         The chemical formula of the precursor molecule (e.g., "C6H12O6").
-     query_spectrum : array-like
-         A 2D array or list of measured spectrum peaks, where each entry is a pair:
-         [m/z, intensity]. The array should be of shape (n_peaks, 2).
-     delta_ppm : float
-         The mass tolerance in ppm for fragment matching. If both `delta_ppm` and 
-         `delta_da` are specified, `delta_da` will take precedence.
-     delta_da : float
-         The mass tolerance in Da for fragment matching. Defaults to 0.02 Da.
-    
-     Returns:
-     -------
-     float
-         The calculated HRF score.
+    Return the spectrum with annotated signals and subformula for High-Resolution Filtering (HRF) score calculation.
+
     """
-    query_spectrum= np.array(query_spectrum,dtype=np.float64)
+    
+    query_spectrum = np.array(query_spectrum,dtype=np.float64)
+          
     if np.sum(query_spectrum[:,1]) == 0:
         return 0
-    
-    def _get_isotopic_weight(sub_formula):
-        try:
-            mol = pyisopach.Molecule(sub_formula)
-            isotopic_weight = mol.isotopic_distribution()[0] - ELECTRON_WEIGHT
-        except:
-            mol = pyisopach.Element(sub_formula,1)
-            isotopic_weight = np.array(mol.isotopic_weight, dtype=np.float64)  - ELECTRON_WEIGHT
-        return isotopic_weight
     
     sub_formulas=generate_sub_formulas(formula)
     sub_formulas_dict = {}
@@ -205,7 +191,10 @@ def HRF(formula:str,
         
         if closest_formula is not None:
             # peak annotated
-            spec_merged.append(query_spectrum[a])
+            peak_annotated = list(query_spectrum[a]) 
+            peak_annotated.append(closest_formula)
+            spec_merged.append(peak_annotated)
+            
             if "_iso" not in closest_formula:
                 match_isotopic_weight_dis = _get_isotopic_weight(closest_formula)
                 iso_No = 1
@@ -215,7 +204,36 @@ def HRF(formula:str,
             if len(match_isotopic_weight_dis) > iso_No:
                 sub_formulas_dict[closest_formula.partition("_iso")[0]+'_iso'+str(iso_No)] = match_isotopic_weight_dis[iso_No]
         a+=1
+        
+    return spec_merged
+          
+          
+def HRF(formula:str,
+        query_spectrum, 
+        delta_ppm=None,delta_da=0.02): 
+    """
+    Calculate the High-Resolution Filtering (HRF) score for a given molecular formula and query spectrum.
     
+    Parameters:
+    ----------
+     formula : str
+         The chemical formula of the precursor molecule (e.g., "C6H12O6").
+     query_spectrum : array-like
+         A 2D array or list of measured spectrum peaks, where each entry is a pair:
+         [m/z, intensity]. The array should be of shape (n_peaks, 2).
+     delta_ppm : float
+         The mass tolerance in ppm for fragment matching. If both `delta_ppm` and 
+         `delta_da` are specified, `delta_da` will take precedence.
+     delta_da : float
+         The mass tolerance in Da for fragment matching. Defaults to 0.02 Da.
+    
+     Returns:
+     -------
+     float
+         The calculated HRF score.
+    """
+    spec_merged = get_HRF_spec(formula,query_spectrum, delta_ppm, delta_da)
+    spec_merged = [sublist[:2] for sublist in spec_merged]
     
     # calculate score
     if len(spec_merged) >0:
@@ -225,7 +243,7 @@ def HRF(formula:str,
         HRF=0
         
     return HRF
-
+  
 
 def RHRF(formula,query_spectrum, 
         ref_spectrum, 
