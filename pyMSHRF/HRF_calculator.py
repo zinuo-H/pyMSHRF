@@ -154,28 +154,56 @@ def _get_isotopic_weight(sub_formula):
     return isotopic_weight
     
 
-def get_HRF_spec(formula:str,
+def get_HRF_annotated(formula:str,
         query_spectrum, 
         delta_ppm=None,delta_da=0.02): 
     """
-    Return the spectrum with annotated signals and subformula for High-Resolution Filtering (HRF) score calculation.
+    Return a list of annotated signals for High-Resolution Filtering (HRF) score calculation, 
+    with each entry either being the matched subformula or `False` if no match is found.
 
-    """
+    Parameters:
+    ----------
+     formula : str
+         The chemical formula of the precursor molecule (e.g., "C6H12O6").
+     query_spectrum : array-like
+         A 2D array or list of measured spectrum peaks, where each entry is a pair:
+         [m/z, intensity]. The array should be of shape (n_peaks, 2).
+     delta_ppm : float
+         The mass tolerance in ppm for fragment matching. If both `delta_ppm` and 
+         `delta_da` are specified, `delta_da` will take precedence.
+     delta_da : float
+         The mass tolerance in Da for fragment matching. Defaults to 0.02 Da.
     
+     Returns:
+     -------
+     list
+         A list with the same length as the input `query_spectrum`. Each element corresponds to a peak and contains either:
+         - The matched subformula, 
+         - `False` if no matching subformula is found.
+        
+    Examples:
+    ---------
+    >>> peaks_query = np.array([[191.09071, 14670.0], [124.05742, 3543.0], [141.09334, 6191.0]], dtype = np.float32)
+    >>> get_HRF_spec('C5H7N3O2', peaks_query)
+    [False, 'C5H6N3O', False]
+         
+    """
+
     query_spectrum = np.array(query_spectrum,dtype=np.float64)
           
     if np.sum(query_spectrum[:,1]) == 0:
-        return 0
+        return [False] * len(query_spectrum)
     
     sub_formulas=generate_sub_formulas(formula)
-    sub_formulas_dict = {}
-    for sub_formula in sub_formulas:
-        isotopic_weight = _get_isotopic_weight(sub_formula)
-        sub_formulas_dict[sub_formula] = isotopic_weight[0]  # dic of subformulas and its monoisotopic mass  
+    sub_formulas_dict = {
+        sub_formula: _get_isotopic_weight(sub_formula)[0]
+        for sub_formula in sub_formulas
+    } # dic of subformulas and its monoisotopic mass  
     
+
     # generate annotated spec merged
     a = 0
-    spec_merged = []     
+    results = [False] * len(query_spectrum) 
     while a < len(query_spectrum):
         exp_mass = query_spectrum[a][0]
         closest_formula = None
@@ -191,9 +219,7 @@ def get_HRF_spec(formula:str,
         
         if closest_formula is not None:
             # peak annotated
-            peak_annotated = list(query_spectrum[a]) 
-            peak_annotated.append(closest_formula)
-            spec_merged.append(peak_annotated)
+            results[a] = closest_formula
             
             if "_iso" not in closest_formula:
                 match_isotopic_weight_dis = _get_isotopic_weight(closest_formula)
@@ -205,7 +231,7 @@ def get_HRF_spec(formula:str,
                 sub_formulas_dict[closest_formula.partition("_iso")[0]+'_iso'+str(iso_No)] = match_isotopic_weight_dis[iso_No]
         a+=1
         
-    return spec_merged
+    return results
           
           
 def HRF(formula:str,
@@ -232,13 +258,17 @@ def HRF(formula:str,
      float
          The calculated HRF score.
     """
-    spec_merged = get_HRF_spec(formula,query_spectrum, delta_ppm, delta_da)
-    spec_merged = [sublist[:2] for sublist in spec_merged]
-    
-    # calculate score
-    if len(spec_merged) >0:
-        spec_merged = np.array(spec_merged)
-        HRF = np.sum(spec_merged[:,0] * spec_merged[:,1]) /  np.sum(query_spectrum[:,0] * query_spectrum[:,1])
+    # Get annotated peaks
+    annotated_results = get_HRF_annotated(formula,query_spectrum, delta_ppm, delta_da)
+    spec_annotated=[]
+    for peak, annotation in zip(query_spectrum, annotated_results):
+        if annotation != False: 
+            spec_annotated.append(peak)
+        
+    # Calculate HRF score
+    if len(spec_annotated) >0:
+        spec_annotated = np.array(spec_annotated)
+        HRF = np.sum(spec_annotated[:,0] * spec_annotated[:,1]) /  np.sum(query_spectrum[:,0] * query_spectrum[:,1])
     else:
         HRF=0
         
@@ -292,7 +322,8 @@ def RHRF(formula,query_spectrum,
     query_spectrum = np.array(sorted(query_spectrum, key=lambda x: x[0]))
     ref_spectrum = np.array(sorted(ref_spectrum, key=lambda x: x[0]))
     
-    query_spec_match = [] 
+    #Step1. get query_spec_match
+    query_spec_match = []
     a=0
     b=0
     
@@ -327,6 +358,7 @@ def RHRF(formula,query_spectrum,
     else:
         query_spec_match = np.array([[0., 0.]], dtype=np.float64)
     
+    # Calculate RHRF score
     RHRF = HRF(formula,query_spec_match, delta_ppm, delta_da)
     return RHRF
     
